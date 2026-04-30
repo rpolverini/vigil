@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vigil — Estado de tu stack</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --green: #16a34a;
+      --yellow: #ca8a04;
+      --orange: #ea580c;
+      --red: #dc2626;
+      --gray: #9ca3af;
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --border: #e7e5e4;
+      --text: #1c1917;
+      --muted: #78716c;
+      --accent: #1c1917;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .mono { font-family: 'DM Mono', monospace; }
+    .serif { font-family: 'Instrument Serif', serif; }
+
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .dot-pulse {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    .status-bar {
+      height: 6px;
+      border-radius: 999px;
+      transition: background 0.4s ease;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+    .card:hover {
+      border-color: #d6d3d1;
+      transform: translateY(-1px);
+    }
+
+    .provider-logo {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-family: 'DM Mono', monospace;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.03em;
+      font-weight: 500;
+    }
+
+    .badge-ok    { background: #dcfce7; color: #15803d; }
+    .badge-warn  { background: #fef9c3; color: #a16207; }
+    .badge-degraded { background: #ffedd5; color: #c2410c; }
+    .badge-down  { background: #fee2e2; color: #b91c1c; }
+    .badge-unknown { background: #f5f5f4; color: #78716c; }
+
+    .link-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-family: 'DM Mono', monospace;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      transition: all 0.15s;
+    }
+    .link-pill:hover {
+      color: var(--text);
+      border-color: #a8a29e;
+      background: #f5f5f4;
+    }
+    .link-pill svg { width: 10px; height: 10px; }
+
+    .global-dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #e7e5e4;
+      border-top-color: #a8a29e;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .fade-in {
+      animation: fadeIn 0.4s ease forwards;
+      opacity: 0;
+    }
+    @keyframes fadeIn { to { opacity: 1; } }
+
+    .last-updated {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* Service list items */
+    .service-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #f5f5f4;
+      font-size: 13px;
+    }
+    .service-row:last-child { border-bottom: none; }
+
+    /* Divider line */
+    .divider { height: 1px; background: var(--border); margin: 1.5rem 0; }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 0;
+      background: var(--surface);
+    }
+
+    .header-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo-text {
+      font-size: 22px;
+      font-family: 'Instrument Serif', serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .logo-text em {
+      font-style: italic;
+      color: var(--muted);
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    .grid-providers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 1rem;
+    }
+
+    @media (max-width: 640px) {
+      .grid-providers { grid-template-columns: 1fr; }
+    }
+
+    /* Global status hero */
+    .hero-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 2.5rem;
+    }
+    .hero-label {
+      font-size: 15px;
+      color: var(--muted);
+    }
+    .hero-value {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    /* Refresh button */
+    .btn-refresh {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-family: 'DM Mono', monospace;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-refresh:hover { color: var(--text); border-color: #a8a29e; background: #f5f5f4; }
+    .btn-refresh svg { width: 12px; height: 12px; }
+
+    .overall-bar {
+      height: 4px;
+      border-radius: 99px;
+      background: var(--border);
+      margin-bottom: 2.5rem;
+      overflow: hidden;
+    }
+    .overall-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.8s ease, background 0.4s ease;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="28" height="28" rx="8" fill="#1c1917"/>
+        <circle cx="14" cy="14" r="5" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="14" cy="14" r="2" fill="white"/>
+        <line x1="14" y1="4" x2="14" y2="8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="14" y1="20" x2="14" y2="24" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="4" y1="14" x2="8" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="20" y1="14" x2="24" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span class="logo-text">vigil<em>.</em></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="last-updated" id="last-updated">—</span>
+      <button class="btn-refresh" id="btn-refresh" onclick="loadAll()">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M10.5 2A5 5 0 1 0 11 6.5"/>
+          <path d="M8.5 2h2V0" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        refresh
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="overall-bar">
+    <div class="overall-bar-fill" id="overall-bar-fill" style="width:0%;background:#e7e5e4;"></div>
+  </div>
+
+  <div class="hero-status">
+    <div id="global-indicator" class="spinner"></div>
+    <span class="hero-label">estado general</span>
+    <span class="hero-value" id="global-label">cargando...</span>
+  </div>
+
+  <div class="grid-providers" id="providers-grid">
+    <!-- Cards rendered by JS -->
+  </div>
+
+  <div style="margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border); display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
+    <span style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;">leyenda</span>
+    <span style="font-size:12px;display:flex;align-items:center;gap:6px;color:#15803d;font-family:'DM Mono',monospace;"><span class="dot" style="background:#16a34a;"></span>operacional</span>
+    <span style="font-size:12px;display:flex;align-items:center;gap:6px;color:#a16207;font-family:'DM Mono',monospace;"><span class="dot" style="background:#ca8a04;"></span>degradado menor</span>
+    <span style="font-size:12px;display:flex;align-items:center;gap:6px;color:#c2410c;font-family:'DM Mono',monospace;"><span class="dot" style="background:#ea580c;"></span>degradado mayor</span>
+    <span style="font-size:12px;display:flex;align-items:center;gap:6px;color:#b91c1c;font-family:'DM Mono',monospace;"><span class="dot" style="background:#dc2626;"></span>caído</span>
+  </div>
+</main>
+
+<script>
+const PROXY = 'https://api.allorigins.win/get?url=';
+
+const PROVIDERS = [
+  {
+    id: 'github',
+    name: 'GitHub',
+    logo: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.14 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>`,
+    logoBg: '#1c1917',
+    url: 'https://www.githubstatus.com/api/v2/summary.json',
+    statusPage: 'https://www.githubstatus.com',
+    parser: parseStatuspage,
+    direct: true,
+  },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    logo: `<svg width="20" height="20" viewBox="0 0 80 80" fill="white"><path d="M49.7 53.1l1.2-4.2c.1-.5-.4-1-.9-.8-2.4.8-8.1 2.3-12 .1-2.8-1.6-3.5-4.8-3.3-7.1h17.6c.5 0 .9-.4 1-.9.3-2.1.1-8.2-5.2-11.6-4.1-2.6-9.9-2.6-14.6.1-5.4 3.1-8.5 8.9-8 15.2.6 7.4 6.3 12.7 13.5 13.1 4 .2 8.2-.8 10.7-3.9zm-8.7-18.2c2.6-.1 4.8 1.3 5.6 3.4H33.5c.8-2.3 3.7-3.3 7.5-3.4z"/></svg>`,
+    logoBg: '#f6821f',
+    url: 'https://www.cloudflarestatus.com/api/v2/summary.json',
+    statusPage: 'https://www.cloudflarestatus.com',
+    parser: parseStatuspage,
+    direct: true,
+  },
+  {
+    id: 'aws',
+    name: 'AWS',
+    logo: `<svg width="22" height="14" viewBox="0 0 88 54" fill="white"><path d="M24.7 18.5c0 1 .1 1.8.3 2.4.2.6.5 1.2.9 1.9.1.2.2.4.2.6 0 .3-.2.5-.5.8l-1.7 1.1c-.2.2-.5.3-.7.3-.3 0-.6-.1-.8-.4-.4-.5-.7-1-.9-1.5-.3-.5-.5-1-.8-1.7-2 2.3-4.4 3.5-7.3 3.5-2.1 0-3.8-.6-4.9-1.8-1.2-1.2-1.8-2.8-1.8-4.8 0-2.1.7-3.8 2.2-5.1 1.5-1.3 3.5-1.9 6-1.9.8 0 1.7.1 2.6.2.9.1 1.9.3 2.9.6v-1.8c0-1.9-.4-3.2-1.2-4-.8-.8-2.1-1.2-4-1.2-0.9 0-1.8.1-2.7.3-.9.2-1.8.5-2.7.9-.4.2-.7.3-.8.3-.4 0-.5-.3-.5-.8V6c0-.4.1-.7.2-.9.2-.2.5-.4.9-.6 1.1-.5 2.3-.9 3.7-1.2 1.4-.3 2.8-.4 4.3-.4 3.3 0 5.7.7 7.3 2.2 1.6 1.5 2.4 3.7 2.4 6.7v8.7zm-10.1 3.8c.8 0 1.6-.1 2.5-.4.9-.3 1.7-.8 2.3-1.5.4-.5.7-1 .8-1.6.1-.6.2-1.3.2-2.2v-1.1c-.7-.2-1.5-.3-2.3-.4-.8-.1-1.5-.1-2.3-.1-1.6 0-2.8.3-3.6 1-.8.7-1.2 1.6-1.2 2.8 0 1.1.3 2 .9 2.6.5.6 1.5.9 2.7.9zm19.4 2.6c-.4 0-.7-.1-.9-.3-.2-.2-.4-.5-.5-.9L27.1 5.5c-.1-.4-.2-.7-.2-.9 0-.4.2-.5.5-.5h2.8c.4 0 .8.1.9.3.2.2.3.5.4.9l4.3 17.1 4-17.1c.1-.4.2-.7.4-.9.2-.2.5-.3.9-.3h2.3c.4 0 .8.1.9.3.2.2.3.5.4.9l4.1 17.3 4.4-17.3c.1-.4.3-.7.4-.9.2-.2.5-.3.9-.3h2.6c.4 0 .5.2.5.5 0 .1 0 .3-.1.5l-6.2 18.2c-.1.4-.3.7-.5.9-.2.2-.5.3-.9.3h-2.5c-.4 0-.8-.1-.9-.3-.2-.2-.3-.5-.4-.9l-4-16.4-3.9 16.4c-.1.4-.2.7-.4.9-.2.2-.5.3-.9.3h-2.6zm33 .7c-1.5 0-3-.2-4.4-.5-1.4-.3-2.5-.7-3.2-1.2-.4-.3-.7-.6-.8-.9-.1-.3-.1-.6-.1-.8V21c0-.5.2-.8.5-.8.1 0 .3 0 .4.1.1.1.3.1.5.2.7.3 1.4.6 2.2.8.8.2 1.7.3 2.5.3 1.3 0 2.4-.2 3.1-.7.7-.5 1.1-1.2 1.1-2.1 0-.6-.2-1.1-.6-1.5-.4-.4-1.1-.8-2.1-1.1l-3-1c-1.5-.5-2.7-1.2-3.4-2.1-.7-.9-1.1-2-1.1-3.1 0-.9.2-1.7.6-2.4.4-.7.9-1.3 1.6-1.8.7-.5 1.4-.9 2.3-1.1.9-.3 1.8-.4 2.8-.4.5 0 1 0 1.5.1.5.1 1 .2 1.4.3.5.1.9.2 1.3.4.4.1.7.3.9.5.3.2.5.4.6.6.1.2.2.5.2.8v1.1c0 .5-.2.8-.5.8-.2 0-.5-.1-.9-.3-1.2-.5-2.6-.8-4-.8-1.2 0-2.2.2-2.8.6-.6.4-1 1-.9 1.9 0 .6.2 1.1.7 1.5.5.4 1.2.8 2.3 1.1l2.9.9c1.5.5 2.6 1.1 3.3 2 .7.8 1.1 1.8 1.1 3 0 .9-.2 1.8-.6 2.5-.4.7-1 1.4-1.7 1.9-.7.5-1.5.9-2.5 1.2-.9.2-2 .3-3.2.3z"/></svg>`,
+    logoBg: '#232f3e',
+    url: 'https://status.aws.amazon.com/data.json',
+    statusPage: 'https://health.aws.amazon.com/health/status',
+    parser: parseAWS,
+    direct: false,
+  },
+  {
+    id: 'gcp',
+    name: 'Google Cloud',
+    logo: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 6.5L8.5 3H15.5L12 6.5Z"/><path d="M12 6.5L8.5 10H15.5L12 6.5Z" opacity=".6"/><path d="M8.5 3L5 6.5L8.5 10L12 6.5L8.5 3Z" opacity=".8"/><path d="M15.5 3L12 6.5L15.5 10L19 6.5L15.5 3Z" opacity=".8"/><path d="M5 6.5L3 12L5 17.5L8.5 14L5 6.5Z" opacity=".7"/><path d="M19 6.5L15.5 10L19 17.5L21 12L19 6.5Z" opacity=".7"/><path d="M8.5 14L5 17.5H12L8.5 14Z" opacity=".9"/><path d="M15.5 14L12 17.5H19L15.5 14Z" opacity=".9"/><path d="M12 17.5L8.5 14L12 21L15.5 14L12 17.5Z"/></svg>`,
+    logoBg: '#4285f4',
+    url: 'https://status.cloud.google.com/incidents.json',
+    statusPage: 'https://status.cloud.google.com',
+    parser: parseGCP,
+    direct: false,
+  },
+];
+
+function parseStatuspage(data) {
+  const d = typeof data === 'string' ? JSON.parse(data) : data;
+  const indicator = d?.status?.indicator || 'unknown';
+  const components = (d?.components || []).filter(c => !c.group && c.name !== 'Visit us at statuspage.io');
+  const services = components.map(c => ({
+    name: c.name,
+    status: mapStatuspageStatus(c.status),
+  }));
+  return { indicator: mapStatuspageIndicator(indicator), services };
+}
+
+function mapStatuspageIndicator(indicator) {
+  if (indicator === 'none') return 'ok';
+  if (indicator === 'minor') return 'warn';
+  if (indicator === 'major') return 'degraded';
+  if (indicator === 'critical') return 'down';
+  return 'unknown';
+}
+
+function mapStatuspageStatus(status) {
+  if (status === 'operational') return 'ok';
+  if (status === 'degraded_performance' || status === 'under_maintenance') return 'warn';
+  if (status === 'partial_outage') return 'degraded';
+  if (status === 'major_outage') return 'down';
+  return 'unknown';
+}
+
+function parseAWS(data) {
+  const d = typeof data === 'string' ? JSON.parse(data) : data;
+  const archive = d?.archive || [];
+  const recent = archive.filter(e => {
+    const ts = e.date * 1000;
+    return Date.now() - ts < 24 * 60 * 60 * 1000;
+  });
+  const regionMap = {};
+  recent.forEach(e => {
+    const key = e.service_name || e.summary;
+    if (!regionMap[key]) regionMap[key] = [];
+    regionMap[key].push(e);
+  });
+  const services = Object.keys(regionMap).map(name => ({
+    name, status: 'degraded',
+  }));
+  const indicator = services.length === 0 ? 'ok' : services.length > 5 ? 'down' : 'warn';
+  return { indicator, services };
+}
+
+function parseGCP(data) {
+  const incidents = typeof data === 'string' ? JSON.parse(data) : data;
+  const active = (Array.isArray(incidents) ? incidents : []).filter(i => !i.end);
+  const services = active.map(i => ({
+    name: i.affected_products?.map(p => p.title).join(', ') || 'Unknown service',
+    status: 'degraded',
+  }));
+  const indicator = services.length === 0 ? 'ok' : services.length > 3 ? 'down' : 'warn';
+  return { indicator, services };
+}
+
+const statusConfig = {
+  ok:       { color: '#16a34a', label: 'operacional',     badgeClass: 'badge-ok',       barColor: '#16a34a' },
+  warn:     { color: '#ca8a04', label: 'degradado menor', badgeClass: 'badge-warn',      barColor: '#ca8a04' },
+  degraded: { color: '#ea580c', label: 'degradado mayor', badgeClass: 'badge-degraded',  barColor: '#ea580c' },
+  down:     { color: '#dc2626', label: 'caído',           badgeClass: 'badge-down',      barColor: '#dc2626' },
+  unknown:  { color: '#9ca3af', label: 'desconocido',     badgeClass: 'badge-unknown',   barColor: '#e7e5e4' },
+  loading:  { color: '#d6d3d1', label: 'cargando...',     badgeClass: 'badge-unknown',   barColor: '#e7e5e4' },
+};
+
+let providerData = {};
+
+function renderCards() {
+  const grid = document.getElementById('providers-grid');
+  grid.innerHTML = '';
+  PROVIDERS.forEach(p => {
+    const state = providerData[p.id] || { status: 'loading', services: [] };
+    const cfg = statusConfig[state.status] || statusConfig.unknown;
+    const visibleServices = (state.services || []).slice(0, 6);
+    const hasIssues = state.services && state.services.length > 0;
+
+    const card = document.createElement('div');
+    card.className = 'card fade-in';
+    card.id = `card-${p.id}`;
+
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="provider-logo" style="background:${p.logoBg};">${p.logo}</div>
+          <div>
+            <div style="font-size:15px;font-weight:500;">${p.name}</div>
+          </div>
+        </div>
+        <span class="badge ${cfg.badgeClass}">${state.status === 'loading' ? '...' : cfg.label}</span>
+      </div>
+
+      <div class="status-bar" style="background:${cfg.barColor};opacity:${state.status === 'ok' ? '0.4' : '1'};margin-bottom:1rem;"></div>
+
+      ${hasIssues && state.status !== 'ok' ? `
+        <div style="margin-bottom:0.75rem;">
+          ${visibleServices.map(s => {
+            const sc = statusConfig[s.status] || statusConfig.unknown;
+            return `<div class="service-row">
+              <span style="color:#44403c;">${s.name}</span>
+              <span class="badge ${sc.badgeClass}">${sc.label}</span>
+            </div>`;
+          }).join('')}
+          ${state.services.length > 6 ? `<div style="font-size:12px;color:var(--muted);padding-top:6px;font-family:'DM Mono',monospace;">+${state.services.length - 6} servicios más</div>` : ''}
+        </div>
+      ` : (state.status === 'ok' ? `
+        <div style="font-size:13px;color:var(--muted);margin-bottom:0.75rem;display:flex;align-items:center;gap:6px;">
+          <span class="dot dot-pulse" style="background:#16a34a;"></span>
+          Todos los sistemas operando normalmente
+        </div>
+      ` : `<div style="font-size:13px;color:var(--muted);margin-bottom:0.75rem;">—</div>`)}
+
+      <a href="${p.statusPage}" target="_blank" rel="noopener" class="link-pill">
+        ver detalle
+        <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M1 9L9 1M4 1h5v5"/>
+        </svg>
+      </a>
+    `;
+
+    grid.appendChild(card);
+  });
+}
+
+function computeGlobal() {
+  const statuses = Object.values(providerData).map(d => d.status);
+  if (statuses.length < PROVIDERS.length) return 'loading';
+  const known = statuses.filter(s => s !== 'unknown');
+  if (known.length === 0) return 'unknown';
+  if (known.every(s => s === 'ok')) return 'ok';
+  const downCount = known.filter(s => s === 'down').length;
+  const warnCount = known.filter(s => s === 'warn' || s === 'degraded').length;
+  if (downCount >= known.length) return 'down';
+  if (downCount > known.length / 2) return 'degraded';
+  if (warnCount > 0 || downCount > 0) return 'warn';
+  return 'ok';
+}
+
+function updateGlobal() {
+  const status = computeGlobal();
+  const cfg = statusConfig[status];
+  const indicator = document.getElementById('global-indicator');
+  const label = document.getElementById('global-label');
+  const bar = document.getElementById('overall-bar-fill');
+
+  if (status === 'loading') {
+    indicator.className = 'spinner';
+    indicator.innerHTML = '';
+    label.textContent = 'cargando...';
+    bar.style.width = '0%';
+    return;
+  }
+
+  const okCount = Object.values(providerData).filter(d => d.status === 'ok').length;
+  const pct = Math.round((okCount / PROVIDERS.length) * 100);
+
+  indicator.className = 'global-dot';
+  indicator.style.background = cfg.color;
+  label.textContent = cfg.label;
+  label.style.color = cfg.color;
+
+  bar.style.width = pct + '%';
+  bar.style.background = cfg.barColor;
+}
+
+async function fetchProvider(p) {
+  try {
+    let data;
+    if (p.direct) {
+      const res = await fetch(p.url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+    } else {
+      const encoded = encodeURIComponent(p.url);
+      const res = await fetch(`${PROXY}${encoded}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const wrapper = await res.json();
+      data = JSON.parse(wrapper.contents);
+    }
+    const parsed = p.parser(data);
+    providerData[p.id] = parsed;
+  } catch (e) {
+    providerData[p.id] = { status: 'unknown', services: [], error: e.message };
+  }
+  renderCards();
+  updateGlobal();
+}
+
+async function loadAll() {
+  providerData = {};
+  renderCards();
+  updateGlobal();
+  document.getElementById('last-updated').textContent = 'actualizando...';
+  await Promise.all(PROVIDERS.map(p => fetchProvider(p)));
+  const now = new Date();
+  document.getElementById('last-updated').textContent =
+    `actualizado ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+
+  // Show sandbox warning if all providers are unknown (likely blocked by iframe CSP)
+  const allUnknown = Object.values(providerData).every(d => d.status === 'unknown');
+  const banner = document.getElementById('sandbox-banner');
+  if (allUnknown) {
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+loadAll();
+setInterval(loadAll, 5 * 60 * 1000);
+</script>
+
+</body>
+</html>
