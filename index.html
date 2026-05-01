@@ -248,6 +248,15 @@
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <span class="last-updated" id="last-updated">—</span>
+      <button class="btn-refresh" onclick="toggleDebug()" style="margin-right:4px;">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" width="12" height="12">
+          <rect x="1" y="1" width="10" height="10" rx="1.5"/>
+          <line x1="3" y1="4" x2="9" y2="4"/>
+          <line x1="3" y1="6.5" x2="7" y2="6.5"/>
+          <line x1="3" y1="9" x2="8" y2="9"/>
+        </svg>
+        logs
+      </button>
       <button class="btn-refresh" id="btn-refresh" onclick="loadAll()">
         <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
           <path d="M10.5 2A5 5 0 1 0 11 6.5"/>
@@ -270,8 +279,21 @@
     <span class="hero-value" id="global-label">cargando...</span>
   </div>
 
+  <div id="sandbox-banner" style="display:none;margin-bottom:1.5rem;padding:12px 16px;background:#fef9c3;border:1px solid #fde68a;border-radius:12px;font-size:13px;color:#92400e;font-family:'DM Mono',monospace;display:none;align-items:center;gap:8px;">
+    <span style="font-size:16px;">⚠</span>
+    <span>Las APIs están bloqueadas en el preview de Claude. Abrí el archivo en un browser real o publicalo en GitHub Pages — ahí va a funcionar perfecto.</span>
+  </div>
+
   <div class="grid-providers" id="providers-grid">
     <!-- Cards rendered by JS -->
+  </div>
+
+  <div id="debug-panel" style="margin-top:2rem;display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+      <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:0.05em;">FETCH LOG</span>
+      <button onclick="document.getElementById('debug-panel').style.display='none'" style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);background:none;border:none;cursor:pointer;">ocultar</button>
+    </div>
+    <div id="debug-log" style="background:#1c1917;border-radius:10px;padding:1rem;font-family:'DM Mono',monospace;font-size:12px;line-height:1.8;"></div>
   </div>
 
   <div style="margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border); display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
@@ -284,7 +306,38 @@
 </main>
 
 <script>
-const PROXY = 'https://api.allorigins.win/get?url=';
+const PROXIES = [
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+];
+
+const fetchLogs = {};
+
+async function fetchWithProxy(p) {
+  for (let i = 0; i < PROXIES.length; i++) {
+    const proxyUrl = PROXIES[i](p.url);
+    try {
+      const res = await fetch(proxyUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`proxy${i+1} HTTP ${res.status}`);
+      const wrapper = await res.json();
+      if (!wrapper || !wrapper.contents) throw new Error(`proxy${i+1} contents null`);
+      const data = JSON.parse(wrapper.contents);
+      fetchLogs[p.id] = { ok: true, msg: `proxy${i+1} OK` };
+      return data;
+    } catch (e) {
+      fetchLogs[p.id] = { ok: false, msg: e.message };
+      if (i === PROXIES.length - 1) throw e;
+    }
+  }
+}
+
+async function fetchDirect(p) {
+  const res = await fetch(p.url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  fetchLogs[p.id] = { ok: true, msg: 'direct OK' };
+  return data;
+}
 
 const PROVIDERS = [
   {
@@ -330,7 +383,9 @@ const PROVIDERS = [
 ];
 
 function parseStatuspage(data) {
+  if (!data) throw new Error('parser received null data');
   const d = typeof data === 'string' ? JSON.parse(data) : data;
+  if (!d || typeof d !== 'object') throw new Error('parser: invalid JSON structure');
   const indicator = d?.status?.indicator || 'unknown';
   const components = (d?.components || []).filter(c => !c.group && c.name !== 'Visit us at statuspage.io');
   const services = components.map(c => ({
@@ -357,6 +412,7 @@ function mapStatuspageStatus(status) {
 }
 
 function parseAWS(data) {
+  if (!data) throw new Error('parser received null data');
   const d = typeof data === 'string' ? JSON.parse(data) : data;
   const archive = d?.archive || [];
   const recent = archive.filter(e => {
@@ -377,6 +433,7 @@ function parseAWS(data) {
 }
 
 function parseGCP(data) {
+  if (!data) throw new Error('parser received null data');
   const incidents = typeof data === 'string' ? JSON.parse(data) : data;
   const active = (Array.isArray(incidents) ? incidents : []).filter(i => !i.end);
   const services = active.map(i => ({
@@ -497,25 +554,16 @@ function updateGlobal() {
 
 async function fetchProvider(p) {
   try {
-    let data;
-    if (p.direct) {
-      const res = await fetch(p.url, { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      data = await res.json();
-    } else {
-      const encoded = encodeURIComponent(p.url);
-      const res = await fetch(`${PROXY}${encoded}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const wrapper = await res.json();
-      data = JSON.parse(wrapper.contents);
-    }
+    const data = p.direct ? await fetchDirect(p) : await fetchWithProxy(p);
     const parsed = p.parser(data);
-    providerData[p.id] = parsed;
+    providerData[p.id] = { ...parsed, fetchMsg: fetchLogs[p.id]?.msg };
   } catch (e) {
-    providerData[p.id] = { status: 'unknown', services: [], error: e.message };
+    const lastLog = fetchLogs[p.id]?.msg || e.message;
+    providerData[p.id] = { status: 'unknown', services: [], error: lastLog, fetchMsg: lastLog };
   }
   renderCards();
   updateGlobal();
+  renderDebugLog();
 }
 
 async function loadAll() {
@@ -528,14 +576,40 @@ async function loadAll() {
   document.getElementById('last-updated').textContent =
     `actualizado ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
 
+  renderDebugLog();
   // Show sandbox warning if all providers are unknown (likely blocked by iframe CSP)
   const allUnknown = Object.values(providerData).every(d => d.status === 'unknown');
   const banner = document.getElementById('sandbox-banner');
   if (allUnknown) {
-    banner.style.display = 'block';
+    banner.style.display = 'flex';
   } else {
     banner.style.display = 'none';
   }
+}
+
+function renderDebugLog() {
+  const log = document.getElementById('debug-log');
+  if (!log) return;
+  const lines = PROVIDERS.map(p => {
+    const state = providerData[p.id];
+    if (!state) return '';
+    const ok = state.status !== 'unknown';
+    const icon = ok ? '<span style="color:#4ade80;">✓</span>' : '<span style="color:#f87171;">✗</span>';
+    const statusColor = ok ? '#4ade80' : '#f87171';
+    const msg = state.fetchMsg || state.error || '—';
+    return `<div style="display:flex;gap:8px;align-items:baseline;">
+      ${icon}
+      <span style="color:#e7e5e4;min-width:110px;">${p.name}</span>
+      <span style="color:${statusColor};flex:1;">${state.status}</span>
+      <span style="color:#78716c;font-size:11px;">${msg}</span>
+    </div>`;
+  }).join('');
+  log.innerHTML = lines || '<span style="color:#78716c;">esperando datos...</span>';
+}
+
+function toggleDebug() {
+  const panel = document.getElementById('debug-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
 loadAll();
