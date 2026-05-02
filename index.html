@@ -102,6 +102,16 @@
     }
     .link-pill svg { width: 10px; height: 10px; }
 
+    .card-link {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+    }
+    .card-link:hover {
+      border-color: #a8a29e;
+      transform: translateY(-2px);
+    }
+
     .global-dot {
       width: 14px; height: 14px;
       border-radius: 50%;
@@ -366,10 +376,8 @@ const PROVIDERS = [
     name: 'AWS',
     logo: `<svg width="22" height="14" viewBox="0 0 88 54" fill="white"><path d="M24.7 18.5c0 1 .1 1.8.3 2.4.2.6.5 1.2.9 1.9.1.2.2.4.2.6 0 .3-.2.5-.5.8l-1.7 1.1c-.2.2-.5.3-.7.3-.3 0-.6-.1-.8-.4-.4-.5-.7-1-.9-1.5-.3-.5-.5-1-.8-1.7-2 2.3-4.4 3.5-7.3 3.5-2.1 0-3.8-.6-4.9-1.8-1.2-1.2-1.8-2.8-1.8-4.8 0-2.1.7-3.8 2.2-5.1 1.5-1.3 3.5-1.9 6-1.9.8 0 1.7.1 2.6.2.9.1 1.9.3 2.9.6v-1.8c0-1.9-.4-3.2-1.2-4-.8-.8-2.1-1.2-4-1.2-0.9 0-1.8.1-2.7.3-.9.2-1.8.5-2.7.9-.4.2-.7.3-.8.3-.4 0-.5-.3-.5-.8V6c0-.4.1-.7.2-.9.2-.2.5-.4.9-.6 1.1-.5 2.3-.9 3.7-1.2 1.4-.3 2.8-.4 4.3-.4 3.3 0 5.7.7 7.3 2.2 1.6 1.5 2.4 3.7 2.4 6.7v8.7zm-10.1 3.8c.8 0 1.6-.1 2.5-.4.9-.3 1.7-.8 2.3-1.5.4-.5.7-1 .8-1.6.1-.6.2-1.3.2-2.2v-1.1c-.7-.2-1.5-.3-2.3-.4-.8-.1-1.5-.1-2.3-.1-1.6 0-2.8.3-3.6 1-.8.7-1.2 1.6-1.2 2.8 0 1.1.3 2 .9 2.6.5.6 1.5.9 2.7.9zm19.4 2.6c-.4 0-.7-.1-.9-.3-.2-.2-.4-.5-.5-.9L27.1 5.5c-.1-.4-.2-.7-.2-.9 0-.4.2-.5.5-.5h2.8c.4 0 .8.1.9.3.2.2.3.5.4.9l4.3 17.1 4-17.1c.1-.4.2-.7.4-.9.2-.2.5-.3.9-.3h2.3c.4 0 .8.1.9.3.2.2.3.5.4.9l4.1 17.3 4.4-17.3c.1-.4.3-.7.4-.9.2-.2.5-.3.9-.3h2.6c.4 0 .5.2.5.5 0 .1 0 .3-.1.5l-6.2 18.2c-.1.4-.3.7-.5.9-.2.2-.5.3-.9.3h-2.5c-.4 0-.8-.1-.9-.3-.2-.2-.3-.5-.4-.9l-4-16.4-3.9 16.4c-.1.4-.2.7-.4.9-.2.2-.5.3-.9.3h-2.6zm33 .7c-1.5 0-3-.2-4.4-.5-1.4-.3-2.5-.7-3.2-1.2-.4-.3-.7-.6-.8-.9-.1-.3-.1-.6-.1-.8V21c0-.5.2-.8.5-.8.1 0 .3 0 .4.1.1.1.3.1.5.2.7.3 1.4.6 2.2.8.8.2 1.7.3 2.5.3 1.3 0 2.4-.2 3.1-.7.7-.5 1.1-1.2 1.1-2.1 0-.6-.2-1.1-.6-1.5-.4-.4-1.1-.8-2.1-1.1l-3-1c-1.5-.5-2.7-1.2-3.4-2.1-.7-.9-1.1-2-1.1-3.1 0-.9.2-1.7.6-2.4.4-.7.9-1.3 1.6-1.8.7-.5 1.4-.9 2.3-1.1.9-.3 1.8-.4 2.8-.4.5 0 1 0 1.5.1.5.1 1 .2 1.4.3.5.1.9.2 1.3.4.4.1.7.3.9.5.3.2.5.4.6.6.1.2.2.5.2.8v1.1c0 .5-.2.8-.5.8-.2 0-.5-.1-.9-.3-1.2-.5-2.6-.8-4-.8-1.2 0-2.2.2-2.8.6-.6.4-1 1-.9 1.9 0 .6.2 1.1.7 1.5.5.4 1.2.8 2.3 1.1l2.9.9c1.5.5 2.6 1.1 3.3 2 .7.8 1.1 1.8 1.1 3 0 .9-.2 1.8-.6 2.5-.4.7-1 1.4-1.7 1.9-.7.5-1.5.9-2.5 1.2-.9.2-2 .3-3.2.3z"/></svg>`,
     logoBg: '#232f3e',
-    url: './aws-status.json',
     statusPage: 'https://health.aws.amazon.com/health/status',
-    parser: parseAWS,
-    direct: true,
+    static: true,
   },
   {
     id: 'gcp',
@@ -412,16 +420,6 @@ function mapStatuspageStatus(status) {
   return 'unknown';
 }
 
-function parseAWS(data) {
-  if (!data) throw new Error('parser received null data');
-  const events = Array.isArray(data) ? data : [];
-  const services = events.map(e => ({
-    name: `${e.service_name || e.summary}${e.region_name ? ` (${e.region_name})` : ''}`,
-    status: 'warn',
-  }));
-  const status = services.length === 0 ? 'ok' : services.length > 5 ? 'down' : 'warn';
-  return { status, services };
-}
 
 function parseGCP(data) {
   if (!data) throw new Error('parser received null data');
@@ -450,6 +448,33 @@ function renderCards() {
   const grid = document.getElementById('providers-grid');
   grid.innerHTML = '';
   PROVIDERS.forEach(p => {
+    if (p.static) {
+      const card = document.createElement('a');
+      card.className = 'card card-link fade-in';
+      card.href = p.statusPage;
+      card.target = '_blank';
+      card.rel = 'noopener';
+      card.id = `card-${p.id}`;
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="provider-logo" style="background:${p.logoBg};">${p.logo}</div>
+            <div style="font-size:15px;font-weight:500;">${p.name}</div>
+          </div>
+          <span class="badge badge-unknown" style="display:inline-flex;align-items:center;gap:5px;">
+            ver estado
+            <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" width="9" height="9"><path d="M1 9L9 1M4 1h5v5"/></svg>
+          </span>
+        </div>
+        <div class="status-bar" style="background:var(--border);margin-bottom:1rem;"></div>
+        <div style="font-size:13px;color:var(--muted);">
+          Consultá el estado directamente en el sitio oficial de AWS.
+        </div>
+      `;
+      grid.appendChild(card);
+      return;
+    }
+
     const state = providerData[p.id] || { status: 'loading', services: [] };
     const cfg = statusConfig[state.status] || statusConfig.unknown;
     const visibleServices = (state.services || []).slice(0, 6);
@@ -503,8 +528,9 @@ function renderCards() {
 }
 
 function computeGlobal() {
+  const liveCount = PROVIDERS.filter(p => !p.static).length;
   const statuses = Object.values(providerData).map(d => d.status);
-  if (statuses.length < PROVIDERS.length) return 'loading';
+  if (statuses.length < liveCount) return 'loading';
   const known = statuses.filter(s => s !== 'unknown');
   if (known.length === 0) return 'unknown';
   if (known.every(s => s === 'ok')) return 'ok';
@@ -531,8 +557,9 @@ function updateGlobal() {
     return;
   }
 
+  const liveCount = PROVIDERS.filter(p => !p.static).length;
   const okCount = Object.values(providerData).filter(d => d.status === 'ok').length;
-  const pct = Math.round((okCount / PROVIDERS.length) * 100);
+  const pct = Math.round((okCount / liveCount) * 100);
 
   indicator.className = 'global-dot';
   indicator.style.background = cfg.color;
@@ -572,7 +599,7 @@ async function loadAll() {
   renderCards();
   updateGlobal();
   document.getElementById('last-updated').textContent = 'actualizando...';
-  await Promise.all(PROVIDERS.map(p => fetchProvider(p)));
+  await Promise.all(PROVIDERS.filter(p => !p.static).map(p => fetchProvider(p)));
   const now = new Date();
   document.getElementById('last-updated').textContent =
     `actualizado ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
