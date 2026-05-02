@@ -307,8 +307,8 @@
 
 <script>
 const PROXIES = [
-  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
 ];
 
 const fetchLogs = {};
@@ -319,9 +319,10 @@ async function fetchWithProxy(p) {
     try {
       const res = await fetch(proxyUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error(`proxy${i+1} HTTP ${res.status}`);
-      const wrapper = await res.json();
-      if (!wrapper || !wrapper.contents) throw new Error(`proxy${i+1} contents null`);
-      const data = JSON.parse(wrapper.contents);
+      const text = await res.text();
+      const wrapper = JSON.parse(text);
+      // allorigins.win wraps in { contents: "..." }; corsproxy.io returns raw JSON
+      const data = wrapper.contents != null ? JSON.parse(wrapper.contents) : wrapper;
       fetchLogs[p.id] = { ok: true, msg: `proxy${i+1} OK` };
       return data;
     } catch (e) {
@@ -392,7 +393,7 @@ function parseStatuspage(data) {
     name: c.name,
     status: mapStatuspageStatus(c.status),
   }));
-  return { indicator: mapStatuspageIndicator(indicator), services };
+  return { status: mapStatuspageIndicator(indicator), services };
 }
 
 function mapStatuspageIndicator(indicator) {
@@ -428,8 +429,8 @@ function parseAWS(data) {
   const services = Object.keys(regionMap).map(name => ({
     name, status: 'degraded',
   }));
-  const indicator = services.length === 0 ? 'ok' : services.length > 5 ? 'down' : 'warn';
-  return { indicator, services };
+  const status = services.length === 0 ? 'ok' : services.length > 5 ? 'down' : 'warn';
+  return { status, services };
 }
 
 function parseGCP(data) {
@@ -440,8 +441,8 @@ function parseGCP(data) {
     name: i.affected_products?.map(p => p.title).join(', ') || 'Unknown service',
     status: 'degraded',
   }));
-  const indicator = services.length === 0 ? 'ok' : services.length > 3 ? 'down' : 'warn';
-  return { indicator, services };
+  const status = services.length === 0 ? 'ok' : services.length > 3 ? 'down' : 'warn';
+  return { status, services };
 }
 
 const statusConfig = {
@@ -554,7 +555,17 @@ function updateGlobal() {
 
 async function fetchProvider(p) {
   try {
-    const data = p.direct ? await fetchDirect(p) : await fetchWithProxy(p);
+    let data;
+    if (p.direct) {
+      data = await fetchDirect(p);
+    } else {
+      try {
+        data = await fetchDirect(p);
+        fetchLogs[p.id] = { ok: true, msg: 'direct OK' };
+      } catch {
+        data = await fetchWithProxy(p);
+      }
+    }
     const parsed = p.parser(data);
     providerData[p.id] = { ...parsed, fetchMsg: fetchLogs[p.id]?.msg };
   } catch (e) {
